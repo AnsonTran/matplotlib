@@ -9,7 +9,7 @@ from matplotlib import scale
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.transforms as mtransforms
-from matplotlib.transforms import Affine2D, Bbox, TransformedBbox
+from matplotlib.transforms import Affine2D, Affine3D, Bbox, TransformedBbox
 from matplotlib.path import Path
 from matplotlib.testing.decorators import image_comparison, check_figures_equal
 
@@ -339,6 +339,207 @@ class TestAffine2D:
         b1.translate(3, 4)
         assert not s._invalid
         assert_array_equal(s.get_matrix(), a.get_matrix())
+
+
+class TestAffine3D:
+    single_point = [1.0, 1.0, 1.0]
+    multiple_points = [[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 4.0],
+                       [5.0, 5.0, 0.0], [6.0, 6.0, 6.0]]
+    pivot = single_point
+
+    def test_init(self):
+        Affine3D([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]])
+        Affine3D(np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
+                           [13, 14, 15, 16]], int))
+        Affine3D(np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
+                           [13, 14, 15, 16]], float))
+
+    def test_values(self):
+        np.random.seed(19680801)
+        values = np.random.random(12)
+        assert_array_equal(Affine3D.from_values(*values).to_values(), values)
+
+    def test_modify_inplace(self):
+        # Some polar transforms require modifying the matrix in place.
+        trans = Affine3D()
+        mtx = trans.get_matrix()
+        mtx[0, 0] = 42
+        assert_array_equal(trans.get_matrix(), [[42, 0, 0, 0], [0, 1, 0, 0],
+                                                [0, 0, 1, 0], [0, 0, 0, 1]])
+
+    def test_clear(self):
+        a = Affine3D(np.random.rand(4, 4) + 5)  # Anything non-identity.
+        a.clear()
+        assert_array_equal(a.get_matrix(), [[1, 0, 0, 0], [0, 1, 0, 0],
+                                            [0, 0, 1, 0], [0, 0, 0, 1]])
+
+    def test_rotate(self):
+        r_pi_2 = [Affine3D().rotate(np.pi / 2, dim) for dim in range(3)]
+        r90 = [Affine3D().rotate_deg(90, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r90[0].transform(self.single_point), [1, -1, 1])
+        assert_array_almost_equal(r90[1].transform(self.single_point), [1, 1, -1])
+        assert_array_almost_equal(r90[2].transform(self.single_point), [-1, 1, 1])
+
+        assert_array_almost_equal(r90[0].transform(self.multiple_points), [
+            [2, 0, 0], [0, 0, 3], [0, -4, 0], [5, 0, 5], [6, -6, 6]])
+        assert_array_almost_equal(r90[1].transform(self.multiple_points), [
+            [0, 0, -2], [0, 3, 0], [4, 0, 0], [0, 5, -5], [6, 6, -6]])
+        assert_array_almost_equal(r90[2].transform(self.multiple_points), [
+            [0, 2, 0], [-3, 0, 0], [0, 0, 4], [-5, 5, 0], [-6, 6, 6]])
+
+        r_pi = [Affine3D().rotate(np.pi, dim) for dim in range(3)]
+        r180 = [Affine3D().rotate_deg(180, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r180[0].transform(self.single_point), [1, -1, -1])
+        assert_array_almost_equal(r180[1].transform(self.single_point), [-1, 1, -1])
+        assert_array_almost_equal(r180[2].transform(self.single_point), [-1, -1, 1])
+
+        assert_array_almost_equal(r180[0].transform(self.multiple_points), [
+            [2, 0, 0], [0, -3, 0], [0, 0, -4], [5, -5, 0], [6, -6, -6]])
+        assert_array_almost_equal(r180[1].transform(self.multiple_points), [
+            [-2, 0, 0], [0, 3, 0], [0, 0, -4], [-5, 5, 0], [-6, 6, -6]])
+        assert_array_almost_equal(r180[2].transform(self.multiple_points), [
+            [-2, 0, 0], [0, -3, 0], [0, 0, 4], [-5, -5, 0], [-6, -6, 6]])
+
+        r_pi_3_2 = [Affine3D().rotate(3 * np.pi / 2, dim) for dim in range(3)]
+        r270 = [Affine3D().rotate_deg(270, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r270[0].transform(self.single_point), [1, 1, -1])
+        assert_array_almost_equal(r270[1].transform(self.single_point), [-1, 1, 1])
+        assert_array_almost_equal(r270[2].transform(self.single_point), [1, -1, 1])
+
+        assert_array_almost_equal(r270[0].transform(self.multiple_points), [
+            [2, 0, 0], [0, 0, -3], [0, 4, 0], [5, 0, -5], [6, 6, -6]])
+        assert_array_almost_equal(r270[1].transform(self.multiple_points), [
+            [0, 0, 2], [0, 3, 0], [-4, 0, 0], [0, 5, 5], [-6, 6, 6]])
+        assert_array_almost_equal(r270[2].transform(self.multiple_points), [
+            [0, -2, 0], [3, 0, 0], [0, 0, 4], [5, -5, 0], [6, -6, 6]])
+
+        for dim in range(3):
+            assert_array_equal(r_pi_2[dim].get_matrix(), r90[dim].get_matrix())
+            assert_array_equal(r_pi[dim].get_matrix(), r180[dim].get_matrix())
+            assert_array_equal(r_pi_3_2[dim].get_matrix(), r270[dim].get_matrix())
+            assert_array_almost_equal(
+                (r90[dim] + r90[dim]).get_matrix(), r180[dim].get_matrix())
+            assert_array_almost_equal(
+                (r90[dim] + r180[dim]).get_matrix(), r270[dim].get_matrix())
+
+    def test_rotate_around(self):
+        r_pi_2 = [Affine3D().rotate_around(*self.pivot, np.pi / 2, dim)
+                  for dim in range(3)]
+        r90 = [Affine3D().rotate_deg_around(*self.pivot, 90, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r90[0].transform(self.multiple_points), [
+            [2, 2, 0], [0, 2, 3], [0, -2, 0], [5, 2, 5], [6, -4, 6]])
+        assert_array_almost_equal(r90[1].transform(self.multiple_points), [
+            [0, 0, 0], [0, 3, 2], [4, 0, 2], [0, 5, -3], [6, 6, -4]])
+        assert_array_almost_equal(r90[2].transform(self.multiple_points), [
+            [2, 2, 0], [-1, 0, 0], [2, 0, 4], [-3, 5, 0], [-4, 6, 6]])
+
+        r_pi = [Affine3D().rotate_around(*self.pivot, np.pi, dim) for dim in range(3)]
+        r180 = [Affine3D().rotate_deg_around(*self.pivot, 180, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r180[0].transform(self.multiple_points), [
+            [2, 2, 2], [0, -1, 2], [0, 2, -2], [5, -3, 2], [6, -4, -4]])
+        assert_array_almost_equal(r180[1].transform(self.multiple_points), [
+            [0, 0, 2], [2, 3, 2], [2, 0, -2], [-3, 5, 2], [-4, 6, -4]])
+        assert_array_almost_equal(r180[2].transform(self.multiple_points), [
+            [0, 2, 0], [2, -1, 0], [2, 2, 4], [-3, -3, 0], [-4, -4, 6]])
+
+        r_pi_3_2 = [Affine3D().rotate_around(*self.pivot, 3 * np.pi / 2, dim)
+                    for dim in range(3)]
+        r270 = [Affine3D().rotate_deg_around(*self.pivot, 270, dim) for dim in range(3)]
+
+        assert_array_almost_equal(r270[0].transform(self.multiple_points), [
+            [2, 0, 2], [0, 0, -1], [0, 4, 2], [5, 0, -3], [6, 6, -4]])
+        assert_array_almost_equal(r270[1].transform(self.multiple_points), [
+            [2, 0, 2], [2, 3, 0], [-2, 0, 0], [2, 5, 5], [-4, 6, 6]])
+        assert_array_almost_equal(r270[2].transform(self.multiple_points), [
+            [0, 0, 0], [3, 2, 0], [0, 2, 4], [5, -3, 0], [6, -4, 6]])
+
+        for dim in range(3):
+            assert_array_almost_equal(r90[dim].transform(self.single_point), [1, 1, 1])
+            assert_array_almost_equal(r180[dim].transform(self.single_point), [1, 1, 1])
+            assert_array_almost_equal(r270[dim].transform(self.single_point), [1, 1, 1])
+            assert_array_equal(r_pi_2[dim].get_matrix(), r90[dim].get_matrix())
+            assert_array_equal(r_pi[dim].get_matrix(), r180[dim].get_matrix())
+            assert_array_equal(r_pi_3_2[dim].get_matrix(), r270[dim].get_matrix())
+            assert_array_almost_equal(
+                (r90[dim] + r90[dim]).get_matrix(), r180[dim].get_matrix())
+            assert_array_almost_equal(
+                (r90[dim] + r180[dim]).get_matrix(), r270[dim].get_matrix())
+
+    def test_scale(self):
+        sx = Affine3D().scale(3, 1, 1)
+        sy = Affine3D().scale(1, -2, 1)
+        sz = Affine3D().scale(1, 1, 4)
+        trans = Affine3D().scale(3, -2, 4)
+        assert_array_equal((sx + sy + sz).get_matrix(), trans.get_matrix())
+        assert_array_equal(trans.transform(self.single_point), [3, -2, 4])
+        assert_array_equal(trans.transform(self.multiple_points), [
+            [6, 0, 0], [0, -6, 0], [0, 0, 16], [15, -10, 0], [18, -12, 24]])
+
+    def test_skew(self):
+        trans_rad = Affine3D().skew(np.pi / 2, np.pi / 4,
+                                    np.pi / 6, np.pi / 8,
+                                    np.pi / 10, np.pi / 12)
+        trans_deg = Affine3D().skew_deg(90, 45, 30, 22.5, 18, 15)
+        assert_array_equal(trans_rad.get_matrix(), trans_deg.get_matrix())
+        # Using ~atan(0.5), ~atan(0.25) produces roundish numbers on output.
+        trans = Affine3D().skew_deg(26.5650512, 14.0362435,
+                                    14.0362435, 14.0362435,
+                                    14.0362435, 26.5650512)
+        assert_array_almost_equal(trans.transform(self.single_point), [1.75, 1.5, 1.75])
+        assert_array_almost_equal(trans.transform(self.multiple_points), [
+            [2, 0.5, 0.5], [1.5, 3, 1.5], [1, 1, 4],
+            [7.5, 6.25, 3.75], [10.5, 9, 10.5]])
+
+    def test_translate(self):
+        tx = Affine3D().translate(23, 0, 0)
+        ty = Affine3D().translate(0, 42, 0)
+        tz = Affine3D().translate(0, 0, -8)
+        trans = Affine3D().translate(23, 42, -8)
+        assert_array_equal((tx + ty + tz).get_matrix(), trans.get_matrix())
+        assert_array_equal(trans.transform(self.single_point), [24, 43, -7])
+        assert_array_equal(trans.transform(self.multiple_points), [
+            [25, 42, -8], [23, 45, -8], [23, 42, -4], [28, 47, -8], [29, 48, -2]])
+
+    def test_rotate_plus_other(self):
+        trans = (Affine3D()
+                 .rotate_deg(90, dim=0)
+                 .rotate_deg_around(*self.pivot, 180, dim=1)
+                 .rotate_deg(270, dim=2))
+        trans_added = (Affine3D().rotate_deg(90, dim=0) +
+                       Affine3D().rotate_deg_around(*self.pivot, 180, dim=1) +
+                       Affine3D().rotate_deg(270, dim=2))
+        assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
+        assert_array_almost_equal(trans.transform(self.single_point), [-1, -1, 1])
+        # assert_array_almost_equal(trans.transform(self.multiple_points),
+        #                           [[4, 2], [5, -1], [2, -2]])
+
+        # trans = Affine2D().rotate_deg(90).scale(3, -2)
+        # trans_added = Affine2D().rotate_deg(90) + Affine2D().scale(3, -2)
+        # assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
+        # assert_array_almost_equal(trans.transform(self.single_point), [-3, -2])
+        # assert_array_almost_equal(trans.transform(self.multiple_points),
+        #                           [[-6, -0], [-9, -6], [0, -8]])
+
+        # trans = (Affine2D().rotate_deg(90)
+        #          .skew_deg(26.5650512, 14.0362435))  # ~atan(0.5), ~atan(0.25)
+        # trans_added = (Affine2D().rotate_deg(90) +
+        #                Affine2D().skew_deg(26.5650512, 14.0362435))
+        # assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
+        # assert_array_almost_equal(trans.transform(self.single_point), [-0.5, 0.75])
+        # assert_array_almost_equal(trans.transform(self.multiple_points),
+        #                           [[-2, -0.5], [-1.5, 2.25], [2, 4]])
+
+        # trans = Affine2D().rotate_deg(90).translate(23, 42)
+        # trans_added = Affine2D().rotate_deg(90) + Affine2D().translate(23, 42)
+        # assert_array_equal(trans.get_matrix(), trans_added.get_matrix())
+        # assert_array_almost_equal(trans.transform(self.single_point), [22, 43])
+        # assert_array_almost_equal(trans.transform(self.multiple_points),
+        #                           [[21, 42], [20, 45], [23, 46]])
 
 
 def test_non_affine_caching():
