@@ -1,0 +1,9 @@
+``Affine2DBase``, ``BlendedAffine2D`` and ``CompositeAffine2D``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In order to support 3-dimensional transforms, the following deprecations have been
+made. The deprecated classes can be directly replaced with the new alternatives
+
+- ``Affine2DBase`` has been replaced with ``AffineImmutable``
+- ``BlendedAffine2D`` has been replaced with ``BlendedAffine``
+- ``CompositeAffine2D`` has been replaced with ``CompositeAffine``.
